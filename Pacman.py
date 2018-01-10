@@ -1,7 +1,7 @@
 import pygame, sys
 from pygame.locals import *
 import csv
-
+from functools import reduce 
 
 # importing the csv game matrix
 gameMatrix = []
@@ -73,56 +73,85 @@ def drawWalls():
                 pygame.draw.line(displaySurface, blueCol, (15 + j * 20, 5 + i * 20), (20 + j * 20, 5 + i * 20), 3)
 
 
+# Shortcut function for displaying text. It creates Surface and Rect objects for given text and recenters it.
+def makeText(text, color, bgcolor, centerx, centery):
+    textSurf = fontObj.render(text, True, color, bgcolor)
+    textRect = textSurf.get_rect()
+    textRect.center = (centerx, centery)
+    return (textSurf, textRect)
+
+
 # drawing the menu on the right-hand side
 def menuButtons():
-    # drawing the menu
+    global pauseSurface, pauseRect, newGameSurface, newGameRect, autoplaySurface, autoplayRect, quitSurface, quitRect
+    
+    # the yellow menu rectangle
     pygame.draw.rect(displaySurface, (204,204,0), (565, 5, 755, 610))
 
-    # Lives and Score text
-    fontObj = pygame.font.Font('freesansbold.ttf', 25)
-    scoreSurfaceObj = fontObj.render('Score', True, (0, 0, 255))
-    scoreRectObj = scoreSurfaceObj.get_rect()
-    scoreRectObj.center = (660, 50)
+    # displaying score, lives and game buttons 
+    scoreSurfaceObj, scoreRectObj = makeText('Score', (0, 0, 255), (204,204,0), 660, 52)
     displaySurface.blit(scoreSurfaceObj, scoreRectObj)
-
-    livesSurfaceObj = fontObj.render('Lives', True, (0, 0, 255))
-    livesRectObj = livesSurfaceObj.get_rect()
-    livesRectObj.center = (660, 160)
+    
+    livesSurfaceObj, livesRectObj = makeText('Lives', (0, 0, 255), (204,204,0), 660, 184)
     displaySurface.blit(livesSurfaceObj, livesRectObj)
 
-    # lives images
+    # Store the option buttons and their rectangles in OPTIONS.
+    pauseSurface, pauseRect = makeText('Pause', (0, 0, 255), (215,215,0), 660, 325)
+    pygame.draw.rect(displaySurface, (150, 150, 0), (pauseRect.left - 5, pauseRect.top - 5, pauseRect.width + 10, pauseRect.height + 10))
+    displaySurface.blit(pauseSurface, pauseRect)
+
+    newGameSurface, newGameRect = makeText('New Game', (0, 0, 255), (215,215,0), 660, 375)
+    pygame.draw.rect(displaySurface, (150, 150, 0), (newGameRect.left - 5, newGameRect.top - 5, newGameRect.width + 10, newGameRect.height + 10))
+    displaySurface.blit(newGameSurface, newGameRect)
+
+    autoplaySurface, autoplayRect = makeText('Autoplay', (0, 0, 255), (215,215,0), 660, 425)
+    pygame.draw.rect(displaySurface, (150, 150, 0), (autoplayRect.left - 5, autoplayRect.top - 5, autoplayRect.width + 10, autoplayRect.height + 10))
+    displaySurface.blit(autoplaySurface, autoplayRect)
+
+    quitSurface, quitRect = makeText('Quit :(', (0, 0, 255), (215,215,0), 660, 475)
+    pygame.draw.rect(displaySurface, (150, 150, 0), (quitRect.left - 5, quitRect.top - 5, quitRect.width + 10, quitRect.height + 10))
+    displaySurface.blit(quitSurface, quitRect)
+
+
+# displaying life images
+def displayLives(nLives = 3):
     livesImage = pygame.image.load('Pacman.png')
     livesImage = pygame.transform.scale(livesImage, (50, 50))
-    displaySurface.blit(livesImage, (600, 180))
-    displaySurface.blit(livesImage, (640, 180))
-    displaySurface.blit(livesImage, (680, 180))
 
-    # TODO:
-    # - add buttons and their functionality
-    # - add actual score number
+    for i in range(nLives):
+        displaySurface.blit(livesImage, (600 + i * 40, 200))
 
 
-# Main loop
-# def main():
+# displaying the actual score (as a string!)
+def displayScore(scoreValue ='0'):
+    scoreSurf, scoreRect = makeText(scoreValue, (0, 0, 0), (204,204,0), 660, 92)
+    displaySurface.blit(scoreSurf, scoreRect)
+
+
+# TODO:
+# - resize the score value
+# - display the dots
+# - implement the game logic
+
+
+# Main loop will start here some day
+global FPSCLOCK, displaySurface, fontObj,nLives, scoreValue
+
 pygame.init()
 displaySurface = pygame.display.set_mode((760, 620))
 pygame.display.set_caption('Pacman')
 
+scoreValue, nLives = 0, 3
+fontObj = pygame.font.Font('freesansbold.ttf', 25)
+
 # Drawing functions
 drawWalls()
 menuButtons()
-
+displayLives()
+displayScore()
 
 clock = pygame.time.Clock()
 fps = 60
-
-button = pygame.Rect(100, 100, 50, 50)
-# creates a rect object
-# The rect method is similar to a list but with a few added perks
-# for example if you want the position of the button you can simpy type
-# button.x or button.y or if you want size you can type button.width or
-# height. you can also get the top, left, right and bottom of an object
-# with button.right, left, top, and bottom
 
 while True:
     for event in pygame.event.get():
@@ -132,19 +161,28 @@ while True:
             sys.exit()
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = pygame.mouse.get_pos() # gets mouse position
-            print(mouse_pos)
+            mousePos = pygame.mouse.get_pos() # gets mouse position
+            print(mousePos)
 
-            # checks if mouse position is over the button
-            # note this method is constantly looking for collisions
-            # the only reason you dont see an evet activated when you
-            #hover over the button is because the method is bellow the
-            # mousedown event if it were outside it would be called the
-            # the moment the mouse hovers over the button
+            # - collidepoint function checks if the mouse position is over the button
+            # - Rect objects have attributes x, y, width, height, top, left, right, bottom
 
-            if button.collidepoint(mouse_pos):
-                # pritns current location of mouse
-                print('button was pressed at {0}'.format(mouse_pos))
+            if quitRect.collidepoint(mousePos):
+                print('Killing me softly')
+                pygame.quit() 
+                sys.exit()
+                
+            if pauseRect.collidepoint(mousePos):
+                print('You clicked the pause button dude')
+
+            if newGameRect.collidepoint(mousePos):
+                print('You clicked the new  button YO')
+                displayScore()
+                displayLives()
+
+            if autoplayRect.collidepoint(mousePos):
+                print('This will soon be the most wild pacman autoplay ever')
+
 
     pygame.display.update()
     clock.tick(fps)
