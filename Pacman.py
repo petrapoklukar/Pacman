@@ -2,13 +2,12 @@ import pygame, sys
 from pygame.locals import *
 import csv
 from functools import reduce 
+import datetime
+import numpy as np
 
 # importing the csv game matrix
-gameMatrix = []
-with open('GameMatrixCSV.csv', 'r') as csvfile:
-    gameMatrixCsv = csv.reader(csvfile, delimiter=',')
-    for row in gameMatrixCsv:
-        gameMatrix.append(row)
+gameMatrix = np.genfromtxt('GameMatrixCSV.csv',delimiter=",")
+
 
 # importing the csv drawing matrix
 drawingMatrix = []
@@ -17,8 +16,39 @@ with open('DrawingMatrixCSV.csv', 'r') as csvfile:
     for row in drawingMatrixCSV:
         drawingMatrix.append(row)
 
+
+class MovingObject:
+    def __init__(self, positionX, positionY):
+        self.posX = positionX
+        self.posY = positionY
+        self.pos = np.array((positionX, positionY))
+
+
+class Pacman(MovingObject):
+    def __init__(self, positionX, positionY, nLives = 3, curDirection = np.array((-1, 0))):
+        MovingObject.__init__(self, positionX, positionY)
+        self.matrixPos = np.floor_divide(self.pos, 20) # current matrix position, default (col, row) = (14, 23)
+        self.nLives = nLives
+        self.curDirection = curDirection # the actual Pacman's direction 
+        self.newDirection = curDirection # the requested Pacman's direction
+
+class Ghost(MovingObject):
+    def __init__(self, positionX, positionY, pacmanPosX, pacmanPosY):
+        MovingObject.__init__(self, positionX, positionY)
+        self.pacmanPosX = pacmanPosX
+        self.pacmanPosY = pacmanPosY
+        self.pacmanPos = (pacmanPosX, pacmanPosY)
+
+
+# TODO:
+# - organizise this mess into classes
+
+
 # drawing the walls
 def drawWalls():
+    displaySurface = pygame.display.set_mode((760, 620))
+    pygame.draw.rect(displaySurface, (0, 0, 0), (0, 0, 560, 620))
+
     blueCol = 0, 0, 255
     for i in range(0, len(drawingMatrix)):
         for j in range(0, len(drawingMatrix[0])):
@@ -123,13 +153,47 @@ def displayLives(nLives = 3):
 
 
 # displaying the actual score (as a string!)
-def displayScore(scoreValue ='0'):
+def displayScore(scoreValue = 0):
+    scoreValue = str(scoreValue)
     scoreSurf, scoreRect = makeText(scoreValue, (0, 0, 0), (204,204,0), 660, 92)
     displaySurface.blit(scoreSurf, scoreRect)
 
+# moving the pacman
+def move(pacman):
+    # Pacman can change its direction only if it is in the middle of a pile.
+    if np.all(np.mod(pacman.pos - 10, np.array((20, 20))) == (0, 0)):
+        # matrix position of the desired direction 
+        newMatrixPosCol, newMatrixPosRow  = pacman.matrixPos + pacman.newDirection
+
+        # if there is a wall in the desired direction
+        if gameMatrix[newMatrixPosRow, newMatrixPosCol] in {8, 9}:
+            # we check if Pacman can perhaps move in the current direction instead of the new one
+            nextMatrixPosCol, nextMatrixPosRow  = pacman.matrixPos + pacman.curDirection
+            if gameMatrix[nextMatrixPosRow, nextMatrixPosCol] not in {8, 9}:
+                pacman.pos += pacman.curDirection * 5
+                pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+            else:
+                # if Pacman cannot move in the current or desired direction it stops
+                pacman.curDirection = np.array((0, 0))
+                pacman.newDirection = np.array((0, 0))
+        # tunnel
+        elif gameMatrix[newMatrixPosRow, newMatrixPosCol] == 5:
+            pacman.pos = np.array((530, 290)) if pacman.curDirection[0] == -1 else np.array((30, 290))
+            pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+
+        # if Pacman can move in the desired direction
+        else:            
+            pacman.curDirection = pacman.newDirection
+            pacman.pos += pacman.curDirection * 5
+            pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+
+    # Pacman is not in the middle of the pile so it just moves forward.
+    else:
+        pacman.pos += pacman.curDirection * 5
+        pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+
 
 # TODO:
-# - resize the score value
 # - display the dots
 # - implement the game logic
 
@@ -144,23 +208,46 @@ pygame.display.set_caption('Pacman')
 scoreValue, nLives = 0, 3
 fontObj = pygame.font.Font('freesansbold.ttf', 25)
 
-# Drawing functions
+# Drawing functions. Each pile has dimensions 20x20 px
 drawWalls()
 menuButtons()
 displayLives()
 displayScore()
 
+
+# Initializing Pacman and the Ghosts
+pacman = Pacman(290,470)
+pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
+
+##
+##pacmanImage = pygame.image.load('pacmanYellow.png')
+##pacmanImage = pygame.transform.scale(pacmanImage, (20, 20))
+##print(type(pacmanImage))
+##displaySurface.blit(pacmanImage, (pacman.posX - 10, pacman.posY - 10))
+
+
+
+# Timers
 clock = pygame.time.Clock()
 fps = 60
 
+
+
 while True:
+    drawWalls()
+    menuButtons()
+    displayLives()
+    displayScore()
+    pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
+    move(pacman)
+
     for event in pygame.event.get():
         if event.type == QUIT:
             # deactivates the pygame library and terminate the program
             pygame.quit() 
             sys.exit()
 
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        elif event.type == pygame.MOUSEBUTTONDOWN:
             mousePos = pygame.mouse.get_pos() # gets mouse position
             print(mousePos)
 
@@ -183,6 +270,20 @@ while True:
             if autoplayRect.collidepoint(mousePos):
                 print('This will soon be the most wild pacman autoplay ever')
 
+        elif event.type == pygame.KEYDOWN:
+            if event.key == K_LEFT:
+                pacman.newDirection = np.array((-1, 0))
+            elif event.key == K_RIGHT:
+                pacman.newDirection = np.array((1, 0))
+            elif event.key == K_DOWN:
+                pacman.newDirection = np.array((0, 1))
+            elif event.key == K_UP:
+                pacman.newDirection = np.array((0, -1))
+            move(pacman) # move the pacman accordingly after the event
+
 
     pygame.display.update()
     clock.tick(fps)
+
+
+
