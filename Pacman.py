@@ -4,6 +4,7 @@ import csv
 from functools import reduce 
 import datetime
 import numpy as np
+from pygame import gfxdraw
 
 # importing the csv game matrix
 gameMatrix = np.genfromtxt('GameMatrixCSV.csv',delimiter=",")
@@ -28,6 +29,9 @@ class Pacman(MovingObject):
     def __init__(self, positionX, positionY, nLives = 3, curDirection = np.array((-1, 0))):
         MovingObject.__init__(self, positionX, positionY)
         self.matrixPos = np.floor_divide(self.pos, 20) # current matrix position, default (col, row) = (14, 23)
+        self.matrixPosRow = self.matrixPos[1]
+        self.matrixPosCol = self.matrixPos[0]
+
         self.nLives = nLives
         self.curDirection = curDirection # the actual Pacman's direction 
         self.newDirection = curDirection # the requested Pacman's direction
@@ -47,7 +51,7 @@ class Ghost(MovingObject):
 # drawing the walls
 def drawWalls():
     displaySurface = pygame.display.set_mode((760, 620))
-    pygame.draw.rect(displaySurface, (0, 0, 0), (0, 0, 560, 620))
+    # pygame.draw.rect(displaySurface, (0, 0, 0), (0, 0, 560, 620))
 
     blueCol = 0, 0, 255
     for i in range(0, len(drawingMatrix)):
@@ -101,6 +105,16 @@ def drawWalls():
             if currentPos == 'SR':
                 pygame.draw.line(displaySurface, blueCol, (15 + j * 20, 15 + i * 20), (20 + j * 20, 15 + i * 20), 3)
                 pygame.draw.line(displaySurface, blueCol, (15 + j * 20, 5 + i * 20), (20 + j * 20, 5 + i * 20), 3)
+            # dots
+            if currentPos == '1':
+                pygame.gfxdraw.aacircle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 2, (255,255,255)) 
+                pygame.gfxdraw.filled_circle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 2, (255,255,255)) 
+            
+            if currentPos == '2':
+                pygame.gfxdraw.aacircle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 5, (255,255,255)) 
+                pygame.gfxdraw.filled_circle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 5, (255,255,255)) 
+
+
 
 
 # Shortcut function for displaying text. It creates Surface and Rect objects for given text and recenters it.
@@ -160,60 +174,89 @@ def displayScore(scoreValue = 0):
 
 # moving the pacman
 def move(pacman):
+
+    def changePosition():
+        pacman.pos += pacman.curDirection * 5
+        pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+    
     # Pacman can change its direction only if it is in the middle of a pile.
     if np.all(np.mod(pacman.pos - 10, np.array((20, 20))) == (0, 0)):
+        checkForDots(pacman.matrixPos[1], pacman.matrixPos[0])
+
+        def tunnelPassing(): # changing the coords while in the tunnel
+            pacman.pos = np.array((530, 290)) if pacman.curDirection[0] == -1 else np.array((30, 290))
+            pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+
         # matrix position of the desired direction 
         newMatrixPosCol, newMatrixPosRow  = pacman.matrixPos + pacman.newDirection
+        matrixIndex = gameMatrix[newMatrixPosRow, newMatrixPosCol]
 
         # if there is a wall in the desired direction
-        if gameMatrix[newMatrixPosRow, newMatrixPosCol] in {8, 9}:
+        if matrixIndex in {8, 9}:
             # we check if Pacman can perhaps move in the current direction instead of the new one
             nextMatrixPosCol, nextMatrixPosRow  = pacman.matrixPos + pacman.curDirection
-            if gameMatrix[nextMatrixPosRow, nextMatrixPosCol] not in {8, 9}:
-                pacman.pos += pacman.curDirection * 5
-                pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+            nextMatrixIndex = gameMatrix[nextMatrixPosRow, nextMatrixPosCol]
+            if nextMatrixIndex not in {8, 9}:
+                if nextMatrixIndex == 5:
+                    tunnelPassing()
+                else:
+                    changePosition()
             else:
                 # if Pacman cannot move in the current or desired direction it stops
                 pacman.curDirection = np.array((0, 0))
                 pacman.newDirection = np.array((0, 0))
-        # tunnel
-        elif gameMatrix[newMatrixPosRow, newMatrixPosCol] == 5:
-            pacman.pos = np.array((530, 290)) if pacman.curDirection[0] == -1 else np.array((30, 290))
-            pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+        # if there is a tunnel entrance
+        elif matrixIndex == 5:
+            tunnelPassing()
 
         # if Pacman can move in the desired direction
-        else:            
+        else:
             pacman.curDirection = pacman.newDirection
-            pacman.pos += pacman.curDirection * 5
-            pacman.matrixPos = np.floor_divide(pacman.pos, 20)
-
+            changePosition()
+            
     # Pacman is not in the middle of the pile so it just moves forward.
     else:
-        pacman.pos += pacman.curDirection * 5
-        pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+        changePosition()
 
 
+# checks if there is a dot and updates the score
+def checkForDots(rowIndex, colIndex):
+    matrixPos = gameMatrix[rowIndex, colIndex]
+    if 0 < matrixPos < 3:
+        global eatenDots, scoreValue
+        eatenDots += 1
+        scoreValue += 10 if matrixPos else 50
+        gameMatrix[rowIndex, colIndex] = 0
+        drawingMatrix[rowIndex][colIndex] = str(0)
+        updateScreen(scoreValue)
+        # TODO: call chasing function if not matrixPos
+        # TODO: declare victory if eatenPoints == 244
+
+# calling all drawing functions
+def updateScreen(scoreValue = 0):
+    drawWalls()
+    menuButtons()
+    displayLives()
+    displayScore()
+
+    
 # TODO:
-# - display the dots
+# - fix the blinking :D 
 # - implement the game logic
 
 
 # Main loop will start here some day
-global FPSCLOCK, displaySurface, fontObj,nLives, scoreValue
+global FPSCLOCK, displaySurface, fontObj,nLives, scoreValue, eatenDots
 
 pygame.init()
 displaySurface = pygame.display.set_mode((760, 620))
 pygame.display.set_caption('Pacman')
 
-scoreValue, nLives = 0, 3
+scoreValue, eatenDots, nLives = 0, 0, 3
 fontObj = pygame.font.Font('freesansbold.ttf', 25)
 
 # Drawing functions. Each pile has dimensions 20x20 px
-drawWalls()
-menuButtons()
-displayLives()
-displayScore()
-
+updateScreen(scoreValue)
 
 # Initializing Pacman and the Ghosts
 pacman = Pacman(290,470)
@@ -229,16 +272,15 @@ pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
 
 # Timers
 clock = pygame.time.Clock()
-fps = 60
-
+fps = 100
 
 
 while True:
-    drawWalls()
-    menuButtons()
-    displayLives()
-    displayScore()
-    pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
+    updateScreen(scoreValue)
+    pygame.gfxdraw.aacircle(displaySurface, pacman.pos[0], pacman.pos[1], 12, (255, 255, 0)) 
+    pygame.gfxdraw.filled_circle(displaySurface, pacman.pos[0], pacman.pos[1], 12, (255, 255, 0)) 
+
+    #pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
     move(pacman)
 
     for event in pygame.event.get():
