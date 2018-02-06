@@ -1,3 +1,8 @@
+
+### ----------------------------------------------- ###
+# - IMPORTING PACKAGES AND DATA
+### ----------------------------------------------- ###
+
 import pygame, sys
 from pygame.locals import *
 import csv
@@ -17,6 +22,9 @@ with open('DrawingMatrixCSV.csv', 'r') as csvfile:
     for row in drawingMatrixCSV:
         drawingMatrix.append(row)
 
+### ----------------------------------------------- ###
+# - CLASSES
+### ----------------------------------------------- ###
 
 class MovingObject:
     def __init__(self, positionX, positionY):
@@ -44,11 +52,37 @@ class Ghost(MovingObject):
         self.pacmanPos = (pacmanPosX, pacmanPosY)
 
 
-# TODO:
-# - organizise this mess into classes
+### ----------------------------------------------- ###
+# - DRAWING FUNCTIONS
+### ----------------------------------------------- ###
+
+### - HELPER FUNCTIONS - ###
+
+# Helper function for drawing circles
+def drawCircle(posX, posY, radius, color):
+    global displaySurace
+    pygame.gfxdraw.aacircle(displaySurface, posX, posY, radius, color) 
+    pygame.gfxdraw.filled_circle(displaySurface, posX, posY, radius, color) 
 
 
-# drawing the walls
+# Helper function for calling all drawing functions
+def updateScreen(scoreValue = 0):
+    drawWalls()
+    menuButtons()
+    displayLives()
+    displayScore(scoreValue)
+
+# Helper function for displaying text. It creates Surface and Rect objects for given text and recenters it.
+def makeText(text, color, bgcolor, centerx, centery):
+    textSurf = fontObj.render(text, True, color, bgcolor)
+    textRect = textSurf.get_rect()
+    textRect.center = (centerx, centery)
+    return (textSurf, textRect)
+
+### --- ###
+
+
+# drawing the walls and the dots
 def drawWalls():
     displaySurface = pygame.display.set_mode((760, 620))
     # pygame.draw.rect(displaySurface, (0, 0, 0), (0, 0, 560, 620))
@@ -107,22 +141,9 @@ def drawWalls():
                 pygame.draw.line(displaySurface, blueCol, (15 + j * 20, 5 + i * 20), (20 + j * 20, 5 + i * 20), 3)
             # dots
             if currentPos == '1':
-                pygame.gfxdraw.aacircle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 2, (255,255,255)) 
-                pygame.gfxdraw.filled_circle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 2, (255,255,255)) 
-            
+                drawCircle(30 + (j - 1) * 20, 30 + (i - 1) * 20, 2, (255,255,255))
             if currentPos == '2':
-                pygame.gfxdraw.aacircle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 5, (255,255,255)) 
-                pygame.gfxdraw.filled_circle(displaySurface, 30 + (j - 1) * 20, 30 + (i - 1) * 20, 5, (255,255,255)) 
-
-
-
-
-# Shortcut function for displaying text. It creates Surface and Rect objects for given text and recenters it.
-def makeText(text, color, bgcolor, centerx, centery):
-    textSurf = fontObj.render(text, True, color, bgcolor)
-    textRect = textSurf.get_rect()
-    textRect.center = (centerx, centery)
-    return (textSurf, textRect)
+                drawCircle(30 + (j - 1) * 20, 30 + (i - 1) * 20, 5, (255,255,255)) 
 
 
 # drawing the menu on the right-hand side
@@ -172,6 +193,28 @@ def displayScore(scoreValue = 0):
     scoreSurf, scoreRect = makeText(scoreValue, (0, 0, 0), (204,204,0), 660, 92)
     displaySurface.blit(scoreSurf, scoreRect)
 
+
+# checks if there is a dot and updates the score
+def checkForDots(rowIndex, colIndex):
+    matrixPos = gameMatrix[rowIndex, colIndex]
+    if 0 < matrixPos < 3:
+        global eatenDots, scoreValue
+        eatenDots += 1
+        scoreValue += 10 if matrixPos == 1 else 50
+        gameMatrix[rowIndex, colIndex] = 0
+        drawingMatrix[rowIndex][colIndex] = str(0)
+        updateScreen(scoreValue)
+        drawCircle(pacman.pos[0], pacman.pos[1], 12, (255, 255, 0))
+
+        # TODO: call chasing function if not matrixPos
+        # TODO: declare victory if eatenPoints == 244
+
+
+
+### ----------------------------------------------- ###
+# - MOVING FUNCTIONS
+### ----------------------------------------------- ###
+
 # moving the pacman
 def move(pacman):
 
@@ -186,6 +229,7 @@ def move(pacman):
         def tunnelPassing(): # changing the coords while in the tunnel
             pacman.pos = np.array((530, 290)) if pacman.curDirection[0] == -1 else np.array((30, 290))
             pacman.matrixPos = np.floor_divide(pacman.pos, 20)
+            changePosition()
 
         # matrix position of the desired direction 
         newMatrixPosCol, newMatrixPosRow  = pacman.matrixPos + pacman.newDirection
@@ -218,32 +262,15 @@ def move(pacman):
     else:
         changePosition()
 
-
-# checks if there is a dot and updates the score
-def checkForDots(rowIndex, colIndex):
-    matrixPos = gameMatrix[rowIndex, colIndex]
-    if 0 < matrixPos < 3:
-        global eatenDots, scoreValue
-        eatenDots += 1
-        scoreValue += 10 if matrixPos else 50
-        gameMatrix[rowIndex, colIndex] = 0
-        drawingMatrix[rowIndex][colIndex] = str(0)
-        updateScreen(scoreValue)
-        # TODO: call chasing function if not matrixPos
-        # TODO: declare victory if eatenPoints == 244
-
-# calling all drawing functions
-def updateScreen(scoreValue = 0):
-    drawWalls()
-    menuButtons()
-    displayLives()
-    displayScore()
-
     
 # TODO:
-# - fix the blinking :D 
-# - implement the game logic
+# - implement the ghosts
+# - new game & pause buttons functionality
 
+
+### ----------------------------------------------- ###
+# - MAIN LOOP
+### ----------------------------------------------- ###
 
 # Main loop will start here some day
 global FPSCLOCK, displaySurface, fontObj,nLives, scoreValue, eatenDots
@@ -262,13 +289,11 @@ updateScreen(scoreValue)
 pacman = Pacman(290,470)
 pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
 
-##
-##pacmanImage = pygame.image.load('pacmanYellow.png')
-##pacmanImage = pygame.transform.scale(pacmanImage, (20, 20))
-##print(type(pacmanImage))
-##displaySurface.blit(pacmanImage, (pacman.posX - 10, pacman.posY - 10))
-
-
+## positions
+##self.blinky = Posasti(250, 230, self.pacman.x, self.pacman.y)
+##self.pinky = Posasti(290, 290, self.pacman.x, self.pacman.y)
+##self.inky = Posasti(270,290)
+##self.clyde = Posasti(310,290)
 
 # Timers
 clock = pygame.time.Clock()
@@ -277,10 +302,7 @@ fps = 100
 
 while True:
     updateScreen(scoreValue)
-    pygame.gfxdraw.aacircle(displaySurface, pacman.pos[0], pacman.pos[1], 12, (255, 255, 0)) 
-    pygame.gfxdraw.filled_circle(displaySurface, pacman.pos[0], pacman.pos[1], 12, (255, 255, 0)) 
-
-    #pygame.draw.circle(displaySurface, (255,255,0), pacman.pos, 12) # pacman
+    drawCircle(pacman.pos[0], pacman.pos[1], 12, (255, 255, 0)) # draw pacman
     move(pacman)
 
     for event in pygame.event.get():
@@ -321,7 +343,6 @@ while True:
                 pacman.newDirection = np.array((0, 1))
             elif event.key == K_UP:
                 pacman.newDirection = np.array((0, -1))
-            move(pacman) # move the pacman accordingly after the event
 
 
     pygame.display.update()
