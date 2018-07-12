@@ -262,7 +262,7 @@ def move(pacman):
     else:
         changePosition()
 
-    
+
 # TODO:
 # - implement the ghosts
 # - new game & pause buttons functionality
